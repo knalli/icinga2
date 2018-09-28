@@ -134,6 +134,7 @@ bool ApiListener::UpdateConfigDir(const ConfigDirInformation& oldConfigInfo, con
 		<< Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", oldTimestamp) << "' ("
 		<< oldTimestamp << ").";
 
+	/* TODO: Deal with recursive directories. */
 	ObjectLock xlock(oldConfig);
 	for (const Dictionary::Pair& kv : oldConfig) {
 		if (!newConfig->Contains(kv.first)) {
@@ -290,6 +291,14 @@ Value ApiListener::ConfigUpdateHandler(const MessageOrigin::Ptr& origin, const D
 	bool configChange = false;
 	std::vector<String> relativePaths;
 
+	/*
+	 * We can and must safely purge the staging directory, as the difference is taken between
+	 * runtime production config and newly received configuration.
+	 */
+	String apiZonesStageDir = GetApiZonesStageDir();
+	Utility::RemoveDirRecursive(apiZonesStageDir);
+	Utility::MkDirP(apiZonesStageDir, 0700);
+
 	ObjectLock olock(updateV1);
 	for (const Dictionary::Pair& kv : updateV1) {
 
@@ -326,7 +335,9 @@ Value ApiListener::ConfigUpdateHandler(const MessageOrigin::Ptr& origin, const D
 		Dictionary::Ptr newConfig = kv.second;
 		ConfigDirInformation currentConfigInfo = LoadConfigDir(currentConfigDir);
 
-		/* Move the received configuration into our stage directory first. */
+		/* Diff the current production configuration with the received configuration.
+		 * If there was a change, collect a signal for later stage validation.
+		 */
 		if (UpdateConfigDir(currentConfigInfo, newConfigInfo, stageConfigDir, zoneName, relativePaths, false))
 			configChange = true;
 	}
@@ -358,8 +369,15 @@ void ApiListener::TryActivateZonesStageCallback(const ProcessResult& pr,
 	/* validation went fine, copy stage and reload */
 	if (pr.ExitStatus == 0) {
 		Log(LogInformation, "ApiListener")
-			<< "Config validation for stage '" << GetApiZonesStageDir() << "' was OK, copying into '" << GetApiZonesDir() << "' and triggering reload.";
+			<< "Config validation for stage '" << GetApiZonesStageDir() << "' was OK, replacing into '" << GetApiZonesDir() << "' and triggering reload.";
 
+		String apiZonesDir = GetApiZonesDir();
+
+		/* Purge production before copying stage. */
+		Utility::RemoveDirRecursive(apiZonesDir);
+		Utility::MkDirP(apiZonesDir, 0700);
+
+		/* Copy all synced configuration files from stage to production. */
 		for (const String& path : relativePaths) {
 			Log(LogNotice, "ApiListener")
 				<< "Copying file '" << path << "' from config sync staging to production zones directory.";
@@ -367,7 +385,7 @@ void ApiListener::TryActivateZonesStageCallback(const ProcessResult& pr,
 			String stagePath = GetApiZonesStageDir() + path;
 			String currentPath = GetApiZonesDir() + path;
 
-			Utility::MkDirP(Utility::DirName(currentPath), 0755);
+			Utility::MkDirP(Utility::DirName(currentPath), 0700);
 
 			Utility::CopyFile(stagePath, currentPath);
 		}
