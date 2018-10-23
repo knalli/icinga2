@@ -186,6 +186,7 @@ private:
 		const std::vector<String>& relativePaths);
 
 	void UpdateLastFailedZonesStageValidation(const String& log);
+	void ClearLastFailedZonesStageValidation();
 
 	/* configsync */
 	void UpdateConfigObject(const ConfigObject::Ptr& object, const MessageOrigin::Ptr& origin,
