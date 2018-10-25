@@ -32,6 +32,7 @@ struct ConfigDirInformation
 {
 	Dictionary::Ptr UpdateV1;
 	Dictionary::Ptr UpdateV2;
+	Dictionary::Ptr Checksums;
 };
 
 /**
@@ -168,20 +169,23 @@ private:
 	void RemoveStatusFile();
 
 	/* filesync */
-	static ConfigDirInformation LoadConfigDir(const String& dir);
+	void SyncLocalZoneDirs() const;
+	void SyncLocalZoneDir(const Zone::Ptr& zone) const;
+
+	void SendConfigUpdate(const JsonRpcConnection::Ptr& aclient);
+
 	static Dictionary::Ptr MergeConfigUpdate(const ConfigDirInformation& config);
 	static bool UpdateConfigDir(const ConfigDirInformation& oldConfigInfo, const ConfigDirInformation& newConfigInfo,
 		const String& configDir, const String& zoneName, std::vector<String>& relativePaths, bool authoritative);
 
-	void SyncZoneDirs() const;
-	void SyncZoneDir(const Zone::Ptr& zone) const;
-
+	static ConfigDirInformation LoadConfigDir(const String& dir);
 	static void ConfigGlobHandler(ConfigDirInformation& config, const String& path, const String& file);
-	void SendConfigUpdate(const JsonRpcConnection::Ptr& aclient);
 
 	static void TryActivateZonesStageCallback(const ProcessResult& pr,
 		const std::vector<String>& relativePaths);
 	static void AsyncTryActivateZonesStage(const std::vector<String>& relativePaths);
+
+	static String GetChecksum(const String& content);
 
 	void UpdateLastFailedZonesStageValidation(const String& log);
 	void ClearLastFailedZonesStageValidation();
