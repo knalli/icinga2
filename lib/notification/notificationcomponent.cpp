@@ -2,14 +2,15 @@
 
 #include "notification/notificationcomponent.hpp"
 #include "notification/notificationcomponent-ti.cpp"
+#include "base/perfdatavalue.hpp"
+#include "base/statsfunction.hpp"
+
 
 using namespace icinga;
 
 REGISTER_TYPE(NotificationComponent);
+REGISTER_STATSFUNCTION(NotificationComponent, &NotificationComponent::StatsFunc);
 
-/**
- * Starts the component.
- */
 void NotificationComponent::Start(bool runtimeCreated)
 {
 	ObjectImpl<NotificationComponent>::Start(runtimeCreated);
@@ -30,6 +31,27 @@ void NotificationComponent::Stop(bool runtimeRemoved)
 		<< "'" << GetName() << "' stopped.";
 
 	ObjectImpl<NotificationComponent>::Stop(runtimeRemoved);
+}
+
+void NotificationComponent::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
+{
+	DictionaryData nodes;
+
+	for (const NotificationComponent::Ptr& notifier : ConfigType::GetObjectsByType<NotificationComponent>()) {
+		unsigned long idle = notifier->GetIdleNotifications();
+		unsigned long pending = notifier->GetPendingNotifications();
+
+		nodes.emplace_back(notifier->GetName(), new Dictionary({
+			{ "idle", idle },
+			{ "pending", pending }
+		}));
+
+		String perfdata_prefix = "notificationcomponent_" + notifier->GetName() + "_";
+		perfdata->Add(new PerfdataValue(perfdata_prefix + "idle", Convert::ToDouble(idle)));
+		perfdata->Add(new PerfdataValue(perfdata_prefix + "pending", Convert::ToDouble(pending)));
+	}
+
+	status->Set("notificationcomponent", new Dictionary(std::move(nodes)));
 }
 
 void NotificationComponent::StateChangeHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, StateType type) {
@@ -111,8 +133,6 @@ void NotificationComponent::NotificationThreadProc()
 		Log(LogCritical, "DEBUG")
 			<< "Executed??? Next one at " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", notification->GetNextNotification());
 		lock.lock();
-
-
 	}
 }
 
@@ -139,4 +159,18 @@ NotificationScheduleInfo NotificationComponent::GetNotificationScheduleInfo(cons
 	nsi.Object = notification;
 	nsi.NextMessage = notification->GetNextNotification();
 	return nsi;
+}
+
+unsigned long NotificationComponent::GetIdleNotifications()
+{
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	return m_IdleNotifications.size();
+}
+
+unsigned long NotificationComponent::GetPendingNotifications()
+{
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	return m_PendingNotifications.size();
 }

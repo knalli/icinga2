@@ -59,10 +59,11 @@ public:
 	void Start(bool runtimeCreated) override;
 	void Stop(bool runtimeRemoved) override;
 
-	void StateChangeHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, StateType type);
+	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
+	unsigned long GetIdleNotifications();
+	unsigned long GetPendingNotifications();
 
 private:
-
 	boost::mutex m_Mutex;
 	boost::condition_variable m_CV;
 	bool m_Stopped{false};
@@ -70,6 +71,8 @@ private:
 
 	NotificationSet m_IdleNotifications;
 	NotificationSet m_PendingNotifications;
+
+	void StateChangeHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, StateType type);
 
 	void NotificationThreadProc();
 	void SendMessageHelper(const Notification::Ptr& notification, NotificationType type, bool reminder);
