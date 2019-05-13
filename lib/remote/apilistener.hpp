@@ -169,6 +169,8 @@ private:
 	void RemoveStatusFile();
 
 	/* filesync */
+	static boost::mutex m_ConfigSyncStageLock;
+
 	void SyncLocalZoneDirs() const;
 	void SyncLocalZoneDir(const Zone::Ptr& zone) const;
 
