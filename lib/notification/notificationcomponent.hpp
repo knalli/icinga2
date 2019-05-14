@@ -77,6 +77,8 @@ private:
 	void NotificationThreadProc();
 	void SendMessageHelper(const Notification::Ptr& notification, NotificationType type, bool reminder);
 	NotificationScheduleInfo GetNotificationScheduleInfo(const Notification::Ptr& notification);
+
+	bool QuestionNotification(const Checkable::Ptr& checkable);
 };
 
 }

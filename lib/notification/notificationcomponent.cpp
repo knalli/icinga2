@@ -56,6 +56,11 @@ void NotificationComponent::StatsFunc(const Dictionary::Ptr& status, const Array
 
 void NotificationComponent::StateChangeHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, StateType type) {
 	// Need to know if this was a recovery (state = ok?)
+	if (!QuestionNotification(checkable)) {
+		Log(LogCritical, "DEBUG") << "Not sending for " << checkable->GetName();
+		return;
+	}
+
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
@@ -134,6 +139,29 @@ void NotificationComponent::NotificationThreadProc()
 			<< "Executed??? Next one at " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", notification->GetNextNotification());
 		lock.lock();
 	}
+}
+
+bool NotificationComponent::QuestionNotification(const Checkable::Ptr& checkable)
+{
+	bool send_notification = false;
+
+	if (checkable->IsReachable(DependencyNotification) && !checkable->IsInDowntime() && !checkable->IsAcknowledged()) {
+		/* Send notifications whether when a hard state change occurred. */
+		if ((checkable->GetLastStateType() == StateTypeSoft && checkable->GetStateType() == StateTypeHard)
+		&& !(checkable->GetLastStateType() == StateTypeSoft && checkable->GetLastStateRaw() == ServiceOK))
+			send_notification = true;
+			/* Or if the checkable is volatile and in a HARD state. */
+		else if (checkable->GetVolatile() && checkable->GetStateType() == StateTypeHard)
+			send_notification = true;
+	}
+
+	if (checkable->GetLastStateRaw() == ServiceOK && checkable->GetLastStateType() == StateTypeSoft)
+		send_notification = false; /* Don't send notifications for SOFT-OK -> HARD-OK. */
+
+	if (checkable->GetVolatile() && checkable->GetLastStateRaw() == ServiceOK && checkable->GetStateRaw() == ServiceOK)
+		send_notification = false; /* Don't send notifications for volatile OK -> OK changes. */
+
+	return (send_notification && !checkable->IsFlapping());
 }
 
 void NotificationComponent::SendMessageHelper(const Notification::Ptr& notification, NotificationType type, bool reminder) {
