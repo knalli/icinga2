@@ -114,6 +114,8 @@ private:
 
 	bool CheckNotificationUserFilters(NotificationType type, const User::Ptr& user, bool force, bool reminder);
 
+	bool SendNotificationQuestion(NotificationType type, const CheckResult::Ptr& cr, bool reminder);
+
 	void ExecuteNotificationHelper(NotificationType type, const User::Ptr& user, const CheckResult::Ptr& cr, bool force, const String& author = "", const String& text = "");
 
 	static bool EvaluateApplyRuleInstance(const intrusive_ptr<Checkable>& checkable, const String& name, ScriptFrame& frame, const ApplyRule& rule);
