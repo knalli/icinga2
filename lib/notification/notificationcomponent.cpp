@@ -56,7 +56,7 @@ void NotificationComponent::StatsFunc(const Dictionary::Ptr& status, const Array
 
 void NotificationComponent::StateChangeHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, StateType type) {
 	// Need to know if this was a recovery (state = ok?)
-	if (!QuestionNotification(checkable)) {
+	if (!HardStateNotificationCheck(checkable)) {
 		Log(LogCritical, "DEBUG") << "Not sending for " << checkable->GetName();
 		return;
 	}
@@ -78,8 +78,7 @@ void NotificationComponent::StateChangeHandler(const Checkable::Ptr& checkable, 
 			<< "Checkable " << checkable->GetName() << " had a hard change and wants to check Notification "
 			<< notification->GetName();
 
-		// Check if notification needs to be sent out
-
+		// Check Filters here
 		notification->BeginExecuteNotification(ntype, checkable->GetLastCheckResult(), false, false);
 
 		// Queue Renotifications
@@ -141,31 +140,53 @@ void NotificationComponent::NotificationThreadProc()
 	}
 }
 
-bool NotificationComponent::QuestionNotification(const Checkable::Ptr& checkable)
+bool NotificationComponent::HardStateNotificationCheck(const Checkable::Ptr& checkable)
 {
 	bool send_notification = false;
 
-	if (checkable->IsReachable(DependencyNotification) && !checkable->IsInDowntime() && !checkable->IsAcknowledged()) {
-		/* Send notifications whether when a hard state change occurred. */
-		if ((checkable->GetLastStateType() == StateTypeSoft && checkable->GetStateType() == StateTypeHard)
-		&& !(checkable->GetLastStateType() == StateTypeSoft && checkable->GetLastStateRaw() == ServiceOK))
-			send_notification = true;
-			/* Or if the checkable is volatile and in a HARD state. */
-		else if (checkable->GetVolatile() && checkable->GetStateType() == StateTypeHard)
-			send_notification = true;
+	// Don't send in these cases
+	if (!checkable->IsReachable(DependencyNotification) || checkable->IsInDowntime()
+	|| checkable->IsAcknowledged() || checkable->IsFlapping()) {
+		Log(LogCritical, "DEBUG")
+			<< "Not Sending because not reachable | in downtime | acknowledged | flapping: " << checkable->GetName();
+		return false;
 	}
 
-	if (checkable->GetLastStateRaw() == ServiceOK && checkable->GetLastStateType() == StateTypeSoft)
+	// We know checkable is in a Hard State, Second case is Recovery
+	if ((checkable->GetLastStateType() == StateTypeSoft) ||
+						(checkable->GetLastStateType() == StateTypeHard
+						&& checkable->GetLastStateRaw() != ServiceOK
+						&& checkable->GetStateRaw() == ServiceOK)) {
+		send_notification = true;
+		Log(LogCritical, "DEBUG")
+			<< "Sending because soft -> hard | recovery: " << checkable->GetName();
+	}
+
+	/* Or if the checkable is volatile and in a HARD state. */
+	if (checkable->GetVolatile()) {
+		send_notification = true;
+		Log(LogCritical, "DEBUG")
+			<< "Sending because volatile & hard state: " << checkable->GetName();
+	}
+
+	if (checkable->GetLastStateRaw() == ServiceOK && checkable->GetLastStateType() == StateTypeSoft) {
 		send_notification = false; /* Don't send notifications for SOFT-OK -> HARD-OK. */
+		Log(LogCritical, "DEBUG")
+			<< "Not sending becuase soft-ok -> hard-ok: " << checkable->GetName();
+	}
 
-	if (checkable->GetVolatile() && checkable->GetLastStateRaw() == ServiceOK && checkable->GetStateRaw() == ServiceOK)
+	if (checkable->GetVolatile() && checkable->GetLastStateRaw() == ServiceOK && checkable->GetStateRaw() == ServiceOK) {
 		send_notification = false; /* Don't send notifications for volatile OK -> OK changes. */
+		Log(LogCritical, "DEBUG")
+			<< "Not sending because volatile & ok -> ok: " << checkable->GetName();
+	}
 
-	return (send_notification && !checkable->IsFlapping());
+	return send_notification;
 }
 
 void NotificationComponent::SendMessageHelper(const Notification::Ptr& notification, NotificationType type, bool reminder) {
 	// Check if we need to send here??
+
 	notification->BeginExecuteNotification(type, notification->GetCheckable()->GetLastCheckResult(), false, reminder);
 
 	boost::mutex::scoped_lock lock(m_Mutex);
