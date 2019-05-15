@@ -20,6 +20,9 @@ void NotificationComponent::Start(bool runtimeCreated)
 
 	Checkable::OnStateChange.connect(std::bind(&NotificationComponent::StateChangeHandler, this, _1, _2, _3));
 
+	/* This is never called and does not work currently */
+	Notification::OnNextNotificationChanged.connect(std::bind(&NotificationComponent::NextNotificationChangedHandler, this, _1, _2));
+
 	m_Thread = std::thread(std::bind(&NotificationComponent::NotificationThreadProc, this));
 }
 
@@ -52,6 +55,28 @@ void NotificationComponent::StatsFunc(const Dictionary::Ptr& status, const Array
 	}
 
 	status->Set("notificationcomponent", new Dictionary(std::move(nodes)));
+}
+
+void NotificationComponent::NextNotificationChangedHandler(const Notification::Ptr& notification, const MessageOrigin::Ptr& origin) {
+	Log(LogCritical, "DEBUG")
+		<< "GOT IT " << notification->GetName();
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	/* remove and re-insert the object from the set in order to force an index update */
+	typedef boost::multi_index::nth_index<NotificationSet, 0>::type MessageView;
+	MessageView& idx = boost::get<0>(m_IdleNotifications);
+
+	auto it = idx.find(notification);
+
+	if (it == idx.end())
+		return;
+
+	idx.erase(notification);
+
+	NotificationScheduleInfo nsi = GetNotificationScheduleInfo(notification);
+	idx.insert(nsi);
+
+	m_CV.notify_all();
 }
 
 void NotificationComponent::StateChangeHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, StateType type) {
