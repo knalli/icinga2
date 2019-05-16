@@ -82,18 +82,14 @@ void NotificationComponent::NextNotificationChangedHandler(const Notification::P
 
 void NotificationComponent::StateChangeHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, StateType type) {
 	// Need to know if this was a recovery (state = ok?)
-	if (!HardStateNotificationCheck(checkable)) {
-		Log(LogCritical, "DEBUG") << "Not sending for " << checkable->GetName();
-		return;
-	}
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	if (type != StateTypeHard) {
+	if (type == StateTypeHard) {
 		Log(LogCritical, "DEBUG")
-				<< "Ignoring soft state change for " << checkable->GetName();
+				<< "Hard state change for " << checkable->GetName();
+		if (!HardStateNotificationCheck(checkable)) {
+			Log(LogCritical, "DEBUG") << "Not sending for " << checkable->GetName();
+			return;
+		}
+	} else {
 		return;
 	}
 
@@ -111,6 +107,16 @@ void NotificationComponent::StateChangeHandler(const Checkable::Ptr& checkable, 
 		if (ntype != NotificationRecovery) {
 			m_IdleNotifications.insert(GetNotificationScheduleInfo(notification));
 			m_CV.notify_all();
+		} else {
+			typedef boost::multi_index::nth_index<NotificationSet, 0>::type MessageView;
+			MessageView& idx = boost::get<0>(m_IdleNotifications);
+
+			auto it = idx.find(notification);
+
+			if (it == idx.end())
+				continue;
+
+			idx.erase(notification);
 		}
 	}
 
@@ -195,7 +201,9 @@ bool NotificationComponent::HardStateNotificationCheck(const Checkable::Ptr& che
 	if (!checkable->IsReachable(DependencyNotification) || checkable->IsInDowntime()
 	|| checkable->IsAcknowledged() || checkable->IsFlapping()) {
 		Log(LogCritical, "DEBUG")
-			<< "Not Sending because not reachable | in downtime | acknowledged | flapping: " << checkable->GetName();
+			<< "Not Sending because " << checkable->GetName() << " is "
+			<< (!checkable->IsReachable(DependencyNotification) ? "not reachable" :
+			checkable->IsInDowntime() ? "in downtime" : checkable->IsAcknowledged() ? "acknowledged":  "flapping");
 		return false;
 	}
 
