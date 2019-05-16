@@ -241,20 +241,22 @@ String Notification::NotificationTypeToString(NotificationType type)
 	}
 }
 
-bool Notification::SendNotificationQuestion(NotificationType type, const CheckResult::Ptr& cr, bool reminder) {
-	String notificationName = GetName();
-
-	Checkable::Ptr checkable = GetCheckable();
-
+const bool Notification::CheckTimeperiod(bool reminder)
+{
 	TimePeriod::Ptr tp = GetPeriod();
 
 	if (tp && !tp->IsInside(Utility::GetTime())) {
 		Log(LogNotice, "Notification")
-				<< "Not sending " << (reminder ? "reminder " : " ") << "notifications for notification object '" << notificationName
-				<< "': not in timeperiod '" << tp->GetName() << "'";
+			<< "Not sending " << (reminder ? "reminder " : " ") << "notifications for notification object '"
+			<< GetName() << "': not in timeperiod '" << tp->GetName() << "'";
 		return false;
 	}
 
+	return true;
+}
+
+bool Notification::CheckTimes(NotificationType type, bool reminder)
+{
 	double now = Utility::GetTime();
 	Dictionary::Ptr times = GetTimes();
 
@@ -262,27 +264,32 @@ bool Notification::SendNotificationQuestion(NotificationType type, const CheckRe
 		Value timesBegin = times->Get("begin");
 		Value timesEnd = times->Get("end");
 
-		if (timesBegin != Empty && timesBegin >= 0 && now < checkable->GetLastHardStateChange() + timesBegin) {
+		if (timesBegin != Empty && timesBegin >= 0 && now < GetCheckable()->GetLastHardStateChange() + timesBegin) {
 			Log(LogNotice, "Notification")
-					<< "Not sending " << (reminder ? "reminder " : " ") << "notifications for notification object '"
-					<< notificationName << "': before specified begin time (" << Utility::FormatDuration(timesBegin) << ")";
+				<< "Not sending " << (reminder ? "reminder " : " ") << "notifications for notification object '"
+				<< GetName() << "': before specified begin time (" << Utility::FormatDuration(timesBegin) << ")";
 
 			/* we need to adjust the next notification time
 			 * delaying the first notification
 			 */
-			SetNextNotification(checkable->GetLastHardStateChange() + timesBegin + 1.0);
+			SetNextNotification(GetCheckable()->GetLastHardStateChange() + timesBegin + 1.0);
 
 			return false;
 		}
 
-		if (timesEnd != Empty && timesEnd >= 0 && now > checkable->GetLastHardStateChange() + timesEnd) {
+		if (timesEnd != Empty && timesEnd >= 0 && now > GetCheckable()->GetLastHardStateChange() + timesEnd) {
 			Log(LogNotice, "Notification")
-					<< "Not sending " << (reminder ? "reminder " : " ") << "notifications for notification object '"
-					<< notificationName << "': after specified end time (" << Utility::FormatDuration(timesEnd) << ")";
+				<< "Not sending " << (reminder ? "reminder " : " ") << "notifications for notification object '"
+				<< GetName() << "': after specified end time (" << Utility::FormatDuration(timesEnd) << ")";
 			return false;
 		}
 	}
 
+	return true;
+}
+
+bool Notification::CheckTypeFilter(NotificationType type, bool reminder)
+{
 	unsigned long ftype = type;
 
 	Log(LogDebug, "Notification")
@@ -293,7 +300,7 @@ bool Notification::SendNotificationQuestion(NotificationType type, const CheckRe
 	if (!(ftype & GetTypeFilter())) {
 		Log(LogNotice, "Notification")
 				<< "Not sending " << (reminder ? "reminder " : " ") << "notifications for notification object '"
-				<< notificationName << "': type '"
+				<< GetName() << "': type '"
 				<< NotificationTypeToStringInternal(type) << "' does not match type filter: "
 				<< NotificationFilterToString(GetTypeFilter(), GetTypeFilterMap()) << ".";
 
@@ -306,6 +313,26 @@ bool Notification::SendNotificationQuestion(NotificationType type, const CheckRe
 				SetNoMoreNotifications(false);
 		}
 
+		return false;
+	}
+
+	return true;
+}
+
+bool Notification::SendNotificationQuestion(NotificationType type, const CheckResult::Ptr& cr, bool reminder) {
+	String notificationName = GetName();
+
+	Checkable::Ptr checkable = GetCheckable();
+
+	if(!CheckTimeperiod(reminder)) {
+		return false;
+	}
+
+	if (!CheckTimes(type, reminder)) {
+		return false;
+	}
+
+	if (!CheckTypeFilter(type, reminder)) {
 		return false;
 	}
 

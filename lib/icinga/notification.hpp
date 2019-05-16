@@ -90,6 +90,11 @@ public:
 
 	static boost::signals2::signal<void (const Notification::Ptr&, const NotificationResult::Ptr&, const MessageOrigin::Ptr&)> OnNewNotificationResult;
 
+	const bool CheckTimeperiod(bool reminder);
+	bool CheckTimes(NotificationType type, bool reminder);
+	bool CheckTypeFilter(NotificationType type, bool reminder);
+
+
 	void Validate(int types, const ValidationUtils& utils) override;
 
 	void ValidateStates(const Lazy<Array::Ptr>& lvalue, const ValidationUtils& utils) override;
