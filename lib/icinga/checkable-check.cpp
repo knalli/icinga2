@@ -390,21 +390,13 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 
 	/* Flapping start/end notifications */
 	if (!in_downtime && !was_flapping && is_flapping) {
-		/* FlappingStart notifications happen on state changes, not in downtimes */
-		if (!IsPaused())
-			OnNotificationsRequested(this, NotificationFlappingStart, cr, "", "", nullptr);
-
-		Log(LogNotice, "Checkable")
+		Log(LogCritical, "Checkable")
 			<< "Flapping Start: Checkable '" << GetName() << "' started flapping (Current flapping value "
 			<< GetFlappingCurrent() << "% > high threshold " << GetFlappingThresholdHigh() << "%).";
 
 		NotifyFlapping(origin);
 	} else if (!in_downtime && was_flapping && !is_flapping) {
-		/* FlappingEnd notifications are independent from state changes, must not happen in downtine */
-		if (!IsPaused())
-			OnNotificationsRequested(this, NotificationFlappingEnd, cr, "", "", nullptr);
-
-		Log(LogNotice, "Checkable")
+		Log(LogCritical, "Checkable")
 			<< "Flapping Stop: Checkable '" << GetName() << "' stopped flapping (Current flapping value "
 			<< GetFlappingCurrent() << "% < low threshold " << GetFlappingThresholdLow() << "%).";
 

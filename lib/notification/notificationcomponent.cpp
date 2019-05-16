@@ -19,6 +19,7 @@ void NotificationComponent::Start(bool runtimeCreated)
 		<< "'" << GetName() << "' started.";
 
 	Checkable::OnStateChange.connect(std::bind(&NotificationComponent::StateChangeHandler, this, _1, _2, _3));
+	Checkable::OnFlappingChanged.connect(std::bind(&NotificationComponent::FlappingChangedHandler, this, _1));
 
 	/* This is never called and does not work currently */
 	Notification::OnNextNotificationChanged.connect(std::bind(&NotificationComponent::NextNotificationChangedHandler, this, _1, _2));
@@ -114,6 +115,27 @@ void NotificationComponent::StateChangeHandler(const Checkable::Ptr& checkable, 
 	}
 
 }
+
+void NotificationComponent::FlappingChangedHandler(const Checkable::Ptr& checkable)
+{
+	NotificationType ntype = checkable->IsFlapping() ? NotificationFlappingStart : NotificationFlappingEnd;
+	Log(LogCritical, "DEBUG") << checkable->GetName() << " is flapping!";
+	for (const Notification::Ptr notification : checkable->GetNotifications()) {
+		Log(LogCritical, "DEBUG")
+				<< "Checkable " << checkable->GetName() << " his flapping and wants to check Notification "
+				<< notification->GetName();
+
+		// Check Filters here
+		notification->BeginExecuteNotification(ntype, checkable->GetLastCheckResult(), false, false);
+
+		// Queue Renotifications
+		if (ntype != NotificationFlappingEnd) {
+			m_IdleNotifications.insert(GetNotificationScheduleInfo(notification));
+			m_CV.notify_all();
+		}
+	}
+}
+
 
 void NotificationComponent::NotificationThreadProc()
 {
