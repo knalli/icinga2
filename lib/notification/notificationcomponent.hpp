@@ -56,6 +56,7 @@ public:
 			>
 	> NotificationSet;
 
+	void OnConfigLoaded() override;
 	void Start(bool runtimeCreated) override;
 	void Stop(bool runtimeRemoved) override;
 
@@ -75,6 +76,7 @@ private:
 	void StateChangeHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, StateType type);
 	void FlappingChangedHandler(const Checkable::Ptr& checkable);
 
+	void ObjectHandler(const ConfigObject::Ptr& object);
 	void NextNotificationChangedHandler(const Notification::Ptr& notification, const MessageOrigin::Ptr& origin);
 
 	void NotificationThreadProc();
