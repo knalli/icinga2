@@ -87,10 +87,8 @@ void NotificationComponent::NextNotificationChangedHandler(const Notification::P
 
 	auto it = idx.find(notification);
 
-	if (it == idx.end())
-		return;
-
-	idx.erase(notification);
+	if (it != idx.end())
+		idx.erase(notification);
 
 	NotificationScheduleInfo nsi = GetNotificationScheduleInfo(notification);
 	idx.insert(nsi);
@@ -117,15 +115,20 @@ void NotificationComponent::StateChangeHandler(const Checkable::Ptr& checkable, 
 		Log(LogCritical, "DEBUG")
 			<< "Checkable " << checkable->GetName() << " had a hard change and wants to check Notification "
 			<< notification->GetName();
+		Log(LogCritical, "DEBUG") << "Current " <<Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", notification->GetNextNotification());
 
 		// Check Filters here
 		notification->BeginExecuteNotification(ntype, checkable->GetLastCheckResult(), false, false);
 
 		// Queue Renotifications
 		if (ntype != NotificationRecovery) {
+			Log(LogCritical, "DEBUG", "ADDING");
+			Log(LogCritical, "DEBUG") << "Schedule Next Message at " <<Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", notification->GetNextNotification());
+
 			m_IdleNotifications.insert(GetNotificationScheduleInfo(notification));
 			m_CV.notify_all();
 		} else {
+			Log(LogCritical, "DEBUG", "REMOVING");
 			typedef boost::multi_index::nth_index<NotificationSet, 0>::type MessageView;
 			MessageView& idx = boost::get<0>(m_IdleNotifications);
 
@@ -214,7 +217,7 @@ void NotificationComponent::NotificationThreadProc()
 
 bool NotificationComponent::HardStateNotificationCheck(const Checkable::Ptr& checkable)
 {
-	bool send_notification = false;
+	bool send_notification = true;
 
 	// Don't send in these cases
 	if (!checkable->IsReachable(DependencyNotification) || checkable->IsInDowntime()
